@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Private, local score log for the NIHL WebQuest.">
+  <title>NIHL Coach Score Log</title>
+  <style>
+    :root { color-scheme: light; --ink:#15202a; --muted:#4a5863; --line:#d4dce2; --paper:#f3f5f7; --card:#fff; --blue:#1f5a8a; --pale:#eaf2f8; --red:#9f2d25; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--paper); color:var(--ink); font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
+    main { width:min(960px,calc(100% - 32px)); margin:40px auto 72px; }
+    header { border-bottom:2px solid var(--blue); padding-bottom:20px; margin-bottom:24px; }
+    .eyebrow { color:var(--blue); text-transform:uppercase; letter-spacing:.1em; font-size:.78rem; font-weight:800; }
+    h1 { font-size:clamp(2rem,5vw,3.2rem); margin:.35rem 0; }
+    h2 { font-size:1.55rem; margin:0 0 12px; }
+    h3 { font-size:1.2rem; margin:0 0 6px; }
+    p { margin:.35rem 0 .8rem; color:var(--muted); }
+    .notice,.panel,.session { background:var(--card); border:1px solid var(--line); border-radius:6px; padding:18px; margin:16px 0; }
+    .notice { border-left:4px solid var(--blue); }
+    .split { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    label { display:block; font-weight:700; margin:12px 0 6px; }
+    textarea,input[type=file] { width:100%; }
+    textarea { min-height:110px; padding:10px; border:1px solid #aebbc5; border-radius:4px; font: .85rem/1.45 ui-monospace,Menlo,monospace; }
+    button { border:1px solid var(--blue); border-radius:4px; padding:9px 13px; font-weight:700; color:#fff; background:var(--blue); cursor:pointer; }
+    button.secondary { color:var(--blue); background:#fff; }
+    button:hover { filter:brightness(.94); }
+    .actions { display:flex; flex-wrap:wrap; align-items:center; gap:9px; margin-top:12px; }
+    #status { color:var(--blue); font-size:.92rem; font-weight:700; }
+    .session { margin:0; }
+    .session-head { display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; border-bottom:1px solid var(--line); padding-bottom:10px; }
+    .code { color:var(--blue); font:800 1.1rem ui-monospace,Menlo,monospace; letter-spacing:.08em; }
+    .meta { color:var(--muted); font-size:.9rem; }
+    table { width:100%; border-collapse:collapse; margin-top:10px; font-size:.9rem; }
+    th,td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); }
+    th { color:var(--muted); font-size:.78rem; }
+    .empty { padding:18px; border:1px dashed #9eabb5; border-radius:4px; color:var(--muted); }
+    @media (max-width:680px) { .split { grid-template-columns:1fr; } main { margin-top:24px; } th,td { padding:7px 3px; font-size:.8rem; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">HOSA · Noise-Induced Hearing Loss WebQuest</div>
+    <h1>Coach Score Log</h1>
+    <p>Collect student results by six-digit session and review each session separately.</p>
+  </header>
+  <div class="notice"><strong>Standalone mode:</strong> Create a code here, have students enter it in their Student WebQuest file, then import their score codes. To show scores live across devices, run the optional session server helper.</div>
+  <section class="panel">
+    <h2>Host a live session</h2>
+    <p>Create a room, share the six-digit code and student link, and watch scores arrive as students check their worksheets.</p>
+    <p class="meta">These two HTML files can be opened on their own. Standalone mode groups scores under this code; students return their score code for you to import. For automatic live updates, run <code>python3 NIHL_Live_Session_Server.py</code> in Terminal and keep it open.</p>
+    <div class="actions"><button id="create-live" type="button">Create session</button><span id="connection-status" class="meta"></span></div>
+    <div id="live-room" hidden style="margin-top:16px">
+      <label for="hosted-session-picker">Sessions created on this coach device</label>
+      <select id="hosted-session-picker" style="width:100%;padding:9px;border:1px solid #aebbc5;border-radius:4px;background:#fff"></select>
+      <p style="margin-top:14px"><strong>Session code</strong><br><span id="live-code" class="code" style="font-size:2rem"></span></p>
+      <p><strong>Student link</strong><br><a id="student-link" href="#"></a></p>
+      <div class="actions"><button id="close-live" type="button" class="secondary">Close session</button><button id="refresh-live" type="button" class="secondary">Refresh results</button></div>
+      <div id="live-results" style="margin-top:14px"></div>
+    </div>
+  </section>
+  <div class="split">
+    <section class="panel">
+      <h2>Enter a score code</h2>
+      <p>Paste the full code shown after the student checks their worksheet.</p>
+      <label for="score-code">Student score code</label>
+      <textarea id="score-code" spellcheck="false" placeholder="NIHL1.…"></textarea>
+      <div class="actions"><button id="add-code" type="button">Add score</button></div>
+    </section>
+    <section class="panel">
+      <h2>Import session data</h2>
+      <p>Choose the <code>NIHL_Session_######.json</code> file downloaded from the student WebQuest.</p>
+      <label for="session-file">Session data file</label>
+      <input id="session-file" type="file" accept=".json,application/json">
+      <div class="actions"><button id="import-session" type="button">Import session</button><button id="export-csv" type="button" class="secondary">Export CSV</button></div>
+    </section>
+  </div>
+  <div class="actions" style="justify-content:space-between;margin:26px 0 12px"><h2 style="margin:0">Saved sessions</h2><button id="refresh" type="button" class="secondary">Refresh</button></div>
+  <div id="status" role="status" aria-live="polite"></div>
+  <div id="sessions" style="display:grid;gap:12px"></div>
+</main>
+<script>
+const SCORE_SALT = 'nihl-salt-2026';
+const STORAGE_KEY = 'hosa_nihl_sessions';
+function safeGet(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
+function safeSet(key, value) { try { localStorage.setItem(key, value); return true; } catch (e) { return false; } }
+function readSessions() { try { const v = JSON.parse(safeGet(STORAGE_KEY) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
+function saveSessions(sessions) { if (!safeSet(STORAGE_KEY, JSON.stringify(sessions))) throw new Error('This browser could not save the score log.'); }
+function fnv(text) { let h=0x811c9dc5; for(let i=0;i<text.length;i++){ h^=text.charCodeAt(i); h=Math.imul(h,0x01000193)>>>0; } return h.toString(16).padStart(8,'0'); }
+function randomSessionId(sessions) { const used=new Set(sessions.map(s=>String(s.id||''))); let id=''; do { let n; try { const a=new Uint32Array(1); crypto.getRandomValues(a); n=a[0]%1000000; } catch(e) { n=Math.floor(Math.random()*1000000); } id=String(n).padStart(6,'0'); } while(used.has(id)); return id; }
+function decodeCode(code) {
+  const p=String(code||'').trim().split('.');
+  if(p.length!==3||p[0]!=='NIHL1') throw new Error('That does not look like an NIHL score code.');
+  let json; try { json=decodeURIComponent(escape(atob(p[1]))); } catch(e) { throw new Error('The code is incomplete or unreadable.'); }
+  if(fnv(json+SCORE_SALT)!==p[2]) throw new Error('The code failed its integrity check.');
+  let d; try { d=JSON.parse(json); } catch(e) { throw new Error('The code contains invalid score data.'); }
+  if(typeof d.n!=='string'||!Number.isFinite(Number(d.c))||!Number.isFinite(Number(d.t))||Number(d.t)<=0||Number(d.c)<0||Number(d.c)>Number(d.t)) throw new Error('The code is missing a valid name or score.');
+  return d;
+}
+function status(message) { document.getElementById('status').textContent=message; }
+function dateText(stamp) { const d=new Date(Number(stamp)); return Number.isNaN(d.getTime())?'Time unavailable':d.toLocaleString(); }
+function render() {
+  const list=document.getElementById('sessions'); const sessions=readSessions().sort((a,b)=>Number(b.startedAt||0)-Number(a.startedAt||0)); list.replaceChildren();
+  if(!sessions.length){ const p=document.createElement('p'); p.className='empty'; p.textContent='No sessions saved yet. Add a score code or import a session data file.'; list.appendChild(p); return; }
+  sessions.forEach(s=>{
+    const card=document.createElement('section'); card.className='session';
+    const head=document.createElement('div'); head.className='session-head';
+    const title=document.createElement('h3'); title.textContent=s.name||'Student';
+    const code=document.createElement('span'); code.className='code'; code.textContent='Session '+s.id;
+    head.append(title,code); card.appendChild(head);
+    const meta=document.createElement('p'); meta.className='meta'; const attempts=Array.isArray(s.attempts)?s.attempts:[]; meta.textContent='Started '+dateText(s.startedAt)+' · '+attempts.length+' score'+(attempts.length===1?'':'s'); card.appendChild(meta);
+    if(attempts.length){ const table=document.createElement('table'); const thead=document.createElement('thead'); thead.innerHTML='<tr><th>Student</th><th>Score</th><th>Percent</th><th>Recorded</th></tr>'; const tbody=document.createElement('tbody');
+      attempts.forEach(a=>{ const tr=document.createElement('tr'); [a.n||s.name||'Student',Number(a.c)+' / '+Number(a.t),Math.round(Number(a.c)/Number(a.t||1)*100)+'%',dateText(a.ts)].forEach(v=>{const td=document.createElement('td');td.textContent=v;tr.appendChild(td);});tbody.appendChild(tr); }); table.append(thead,tbody);card.appendChild(table); }
+    list.appendChild(card);
+  });
+}
+function mergeAttempts(target, incoming) {
+  if(!Array.isArray(target.attempts)) target.attempts=[];
+  if(!Array.isArray(incoming)) return;
+  incoming.forEach(a=>{
+    const c=Number(a.c),t=Number(a.t),ts=Number(a.ts)||Date.now();
+    if(!Number.isFinite(c)||!Number.isFinite(t)||t<=0||c<0||c>t) return;
+    if(!target.attempts.some(old=>Number(old.c)===c&&Number(old.t)===t&&Number(old.ts)===ts&&String(old.n||target.name)===String(a.n||target.name))) target.attempts.push({n:String(a.n||target.name||'Student'),participantId:a.participantId||'',c,t,ts,source:a.source||'session-file'});
+  });
+}
+const connectionStatus=document.getElementById('connection-status');
+const liveRoom=document.getElementById('live-room');
+const liveResults=document.getElementById('live-results');
+const liveCode=document.getElementById('live-code');
+const studentLink=document.getElementById('student-link');
+const hostedPicker=document.getElementById('hosted-session-picker');
+const API_BASE=location.protocol==='file:'?'http://127.0.0.1:8765':'';
+let activeLiveCode='';
+let liveTimer=null;
+let activeIsOffline=false;
+async function api(path,options={}) {
+  let response;
+  const headers=Object.assign({'Content-Type':'application/json'},options.headers||{});
+  const protectedCode=path.match(/\/api\/sessions\/([0-9]{6})(?:\/close)?$/);
+  if(protectedCode&&(path.indexOf('/close')!==-1||(options.method||'GET')==='GET')){
+    const token=localStorage.getItem('nihl-coach-token-'+protectedCode[1]);
+    if(token)headers['X-Coach-Token']=token;
+  }
+  try { response=await fetch(API_BASE+path,Object.assign({},options,{headers})); }
+  catch(e) { throw new Error('Live session server is not running. In Terminal, run: python3 NIHL_Live_Session_Server.py'); }
+  let body={}; try { body=await response.json(); } catch(e) {}
+  if(!response.ok) throw new Error(body.error||'Live session request failed.');
+  return body;
+}
+function renderLiveResults(session) {
+  liveResults.replaceChildren();
+  const people=Array.isArray(session.students)?session.students:[];
+  const scores=Array.isArray(session.scores)?session.scores:[];
+  const summary=document.createElement('p'); summary.className='meta'; summary.textContent=people.length+' student'+(people.length===1?'':'s')+' joined · '+scores.length+' score'+(scores.length===1?'':'s')+(session.closed?' · Closed':' · Live'); liveResults.appendChild(summary);
+  if(!scores.length){const p=document.createElement('p');p.className='empty';p.textContent='Waiting for students to join and submit a score…';liveResults.appendChild(p);return;}
+  const table=document.createElement('table');const thead=document.createElement('thead');thead.innerHTML='<tr><th>Student</th><th>Score</th><th>Percent</th><th>Time</th></tr>';const tbody=document.createElement('tbody');
+  scores.slice().reverse().forEach(score=>{const tr=document.createElement('tr');[score.name,Number(score.correct)+' / '+Number(score.total),Math.round(Number(score.correct)/Number(score.total||1)*100)+'%',new Date(Number(score.ts)).toLocaleTimeString()].forEach(value=>{const td=document.createElement('td');td.textContent=value;tr.appendChild(td);});tbody.appendChild(tr);});table.append(thead,tbody);liveResults.appendChild(table);
+}
+async function refreshLive() {
+  if(!activeLiveCode)return;
+  if(activeIsOffline)return;
+  try { const data=await api('/api/sessions/'+activeLiveCode); renderLiveResults(data.session); connectionStatus.textContent='Live · updates automatically'; }
+  catch(e) { connectionStatus.textContent=e.message; }
+}
+function hostedHistory() { try { const v=JSON.parse(localStorage.getItem('nihl-coach-hosted-sessions')||'[]'); return Array.isArray(v)?v:[]; } catch(e) { return []; } }
+function saveHostedHistory(items) { try { localStorage.setItem('nihl-coach-hosted-sessions',JSON.stringify(items)); } catch(e) {} }
+function renderHostedPicker() {
+  const items=hostedHistory(); hostedPicker.replaceChildren();
+  items.slice().reverse().forEach(item=>{const option=document.createElement('option');option.value=item.id;option.textContent='Session '+item.id+' · '+new Date(Number(item.createdAt)).toLocaleString();hostedPicker.appendChild(option);});
+  if(activeLiveCode)hostedPicker.value=activeLiveCode;
+}
+async function openHostedSession(code, address, offline) {
+  if(!code)return;
+  activeLiveCode=code; activeIsOffline=!!offline; liveCode.textContent=code; liveRoom.hidden=false;
+  const fallback=location.protocol+'//'+location.hostname+(location.port?':'+location.port:'')+'/NIHL_WebQuest_Student.html';
+  if(activeIsOffline){studentLink.removeAttribute('href');studentLink.textContent='Share the Student WebQuest HTML file separately; students enter this session code.';liveResults.replaceChildren();const p=document.createElement('p');p.className='empty';p.textContent='Standalone mode: scores do not sync here. Import each student score code below to add it to this session.';liveResults.appendChild(p);connectionStatus.textContent='Offline session ready · score codes are entered manually';}
+  else{const url=address||fallback;studentLink.href=url;studentLink.textContent=url;}
+  renderHostedPicker();
+  if(!activeIsOffline)await refreshLive();
+  if(liveTimer)clearInterval(liveTimer);
+  if(!activeIsOffline)liveTimer=setInterval(refreshLive,2000);
+}
+function createOfflineSession() {
+  const items=hostedHistory();const used=new Set(items.map(item=>String(item.id)));let code='';
+  do{let number;try{const bytes=new Uint32Array(1);crypto.getRandomValues(bytes);number=bytes[0]%1000000;}catch(e){number=Math.floor(Math.random()*1000000);}code=String(number).padStart(6,'0');}while(used.has(code));
+  items.push({id:code,createdAt:Date.now(),offline:true});saveHostedHistory(items);openHostedSession(code,'',true);
+}
+document.getElementById('create-live').addEventListener('click',async()=>{
+  connectionStatus.textContent='Creating session…';
+  try {
+    const data=await api('/api/sessions',{method:'POST',body:JSON.stringify({})});
+    activeLiveCode=data.session.id; localStorage.setItem('nihl-coach-token-'+activeLiveCode,data.coachToken);
+    const info=await api('/api/info'); const host=(info.hostIps||[])[0]||location.hostname;
+    const address=location.protocol+'//'+host+(location.port?':'+location.port:'')+'/NIHL_WebQuest_Student.html';
+    const history=hostedHistory(); history.push({id:activeLiveCode,createdAt:data.session.createdAt,address}); saveHostedHistory(history);
+    await openHostedSession(activeLiveCode,address);
+  } catch(e) { createOfflineSession(); }
+});
+document.getElementById('close-live').addEventListener('click',async()=>{
+  if(!activeLiveCode)return;
+  if(activeIsOffline){connectionStatus.textContent='Offline session code '+activeLiveCode+' is ready for score-code imports.';return;}
+  try { await api('/api/sessions/'+activeLiveCode+'/close',{method:'POST',body:JSON.stringify({})});await refreshLive();connectionStatus.textContent='Session closed. Students can no longer join.'; }
+  catch(e) { connectionStatus.textContent=e.message; }
+});
+document.getElementById('refresh-live').addEventListener('click',refreshLive);
+hostedPicker.addEventListener('change',()=>{const item=hostedHistory().find(s=>s.id===hostedPicker.value);openHostedSession(hostedPicker.value,item&&item.address,item&&item.offline);});
+if(location.protocol==='file:'){connectionStatus.textContent='Standalone mode ready. Create a code below; scores are imported with each student code.';renderHostedPicker();const items=hostedHistory();if(items.length)openHostedSession(items[items.length-1].id,items[items.length-1].address,items[items.length-1].offline);}
+else api('/api/info').then(()=>{connectionStatus.textContent='Live server connected.';renderHostedPicker();const items=hostedHistory();if(items.length)openHostedSession(items[items.length-1].id,items[items.length-1].address,items[items.length-1].offline);}).catch(()=>{connectionStatus.textContent='Standalone mode ready. Create a code below; scores are imported with each student code.';renderHostedPicker();});
+
+document.getElementById('add-code').addEventListener('click',()=>{
+  status(''); try { const data=decodeCode(document.getElementById('score-code').value); const sessions=readSessions(); const id=/^[0-9]{6}$/.test(String(data.sid||''))?String(data.sid):randomSessionId(sessions); let s=sessions.find(x=>x.id===id);
+    if(!s){s={id,name:data.n,startedAt:Number(data.ts)||Date.now(),source:'manual-import',attempts:[],importedCodes:[]};sessions.push(s);}
+    if(!Array.isArray(s.importedCodes))s.importedCodes=[]; if(!Array.isArray(s.attempts))s.attempts=[];
+    if(s.importedCodes.includes(fnv(document.getElementById('score-code').value.trim()))||s.attempts.some(a=>Number(a.c)===Number(data.c)&&Number(a.t)===Number(data.t)&&Number(a.ts)===Number(data.ts))){status('That score is already saved in Session '+id+'.');}
+    else{s.name=data.n;s.attempts.push({n:data.n,c:Number(data.c),t:Number(data.t),ts:Number(data.ts)||Date.now(),source:'manual-import'});s.importedCodes.push(fnv(document.getElementById('score-code').value.trim()));saveSessions(sessions);status('Added '+data.n+' to Session '+id+'.');}
+    render();
+  } catch(e){status(e.message||'Unable to add the score code.');}
+});
+document.getElementById('import-session').addEventListener('click',async()=>{
+  status(''); const file=document.getElementById('session-file').files[0]; if(!file){status('Choose a session data file first.');return;}
+  try { const payload=JSON.parse(await file.text()); if(payload.format!=='nihl-session-export'||!Array.isArray(payload.sessions))throw new Error('This is not an NIHL session data file.'); const sessions=readSessions(); let added=0;
+    payload.sessions.forEach(incoming=>{if(!/^[0-9]{6}$/.test(String(incoming.id||'')))return;let current=sessions.find(s=>s.id===incoming.id);if(!current){current={id:incoming.id,name:String(incoming.name||'Student'),startedAt:Number(incoming.startedAt)||Date.now(),source:'session-file-import',attempts:[],importedCodes:[]};sessions.push(current);}current.name=String(incoming.name||current.name||'Student');mergeAttempts(current,incoming.attempts);added++;});
+    if(!added)throw new Error('The file did not contain a valid six-digit session.'); saveSessions(sessions);status('Session data imported.');render();
+  }catch(e){status(e.message||'Unable to import this session file.');}
+});
+document.getElementById('export-csv').addEventListener('click',async()=>{
+  const rows=[['Session code','Student','Score','Total','Percent','Recorded','Source']];readSessions().forEach(s=>(s.attempts||[]).forEach(a=>rows.push([s.id,a.n||s.name||'Student',a.c,a.t,Math.round(Number(a.c)/Number(a.t||1)*100)+'%',dateText(a.ts),a.source||s.source||'automatic'])));
+  if(activeLiveCode){try{const live=await api('/api/sessions/'+activeLiveCode);(live.session.scores||[]).forEach(a=>rows.push([activeLiveCode,a.name,a.correct,a.total,Math.round(Number(a.correct)/Number(a.total||1)*100)+'%',dateText(a.ts),'live']));}catch(e){status('Could not include live session scores in the export: '+e.message);}}
+  const csv=rows.map(row=>row.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join(String.fromCharCode(13,10));const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='NIHL_Score_Log.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+});
+document.getElementById('refresh').addEventListener('click',render);
+render();
+</script>
+</body>
+</html>
